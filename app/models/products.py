@@ -1,9 +1,9 @@
 from decimal import Decimal
-from sqlalchemy import String, Boolean, Integer, Numeric, Float, text
+from sqlalchemy import String, Boolean, Integer, Numeric, Float, text, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import ForeignKey
+from sqlalchemy import ForeignKey, func
 from app.database import Base
-
+from datetime import datetime
 class Product(Base):
     __tablename__ = "products"
 
@@ -20,3 +20,5 @@ class Product(Base):
     category: Mapped["Category"] = relationship("Category", back_populates="products")
     seller: Mapped["User"] = relationship("User", back_populates="products")  # New
     reviews: Mapped[list["Review"]] = relationship("Review", back_populates="product")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

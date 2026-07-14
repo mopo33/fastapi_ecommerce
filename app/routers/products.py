@@ -8,8 +8,8 @@ from app.models.categories import Category as CategoryModel
 from app.schemas import Product as ProductSchema, ProductCreate, ProductList
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db_depends import get_async_db
-from sqlalchemy import select, func, desc, update
-
+from sqlalchemy import select, func, desc, update, asc
+from enum import Enum
 
 # Создаём маршрутизатор для товаров
 router = APIRouter(
@@ -17,6 +17,16 @@ router = APIRouter(
     tags=["products"],
 )
 
+class ProductSortField(str, Enum):
+    id = "id"
+    created_at = "created_at"
+    price = "price"
+    name = "name"
+    rating = "rating"
+
+class SortDir(str, Enum):
+    asc = "asc"
+    desc = "desc"
 
 @router.get("/", response_model=ProductList)
 async def get_all_products(
@@ -32,11 +42,33 @@ async def get_all_products(
             None, description="true — только товары в наличии, false — только без остатка"),
         seller_id: int | None = Query(
             None, description="ID продавца для фильтрации"),
+        sort_by: list[ProductSortField] = Query([ProductSortField.id], descrtiption='Список для сортировки'),
+        sort_dir: list[SortDir] = Query([SortDir.desc], descrtiption='Выбор сортировки по убыванию или по возрастанию'),
         db: AsyncSession = Depends(get_async_db),
 ):
     """
     Возвращает список всех активных товаров с поддержкой фильтров.
     """
+
+    if len(sort_by) != len(sort_dir):
+        raise HTTPException(status_code=400, detail='Количество полей сортировки и направлений не совпадает')
+
+    sort_mapping = {
+        ProductSortField.id: ProductModel.id,
+        ProductSortField.created_at: ProductModel.created_at,
+        ProductSortField.price: ProductModel.price,
+        ProductSortField.name: ProductModel.name,
+        ProductSortField.rating: ProductModel.rating
+    }
+
+    sorted_list = []
+    for field, direction in zip(sort_by, sort_dir):
+        sort_col = sort_mapping[field]
+        if direction == SortDir.desc:
+            sorted_list.append(desc(sort_col))
+        else:
+            sorted_list.append(asc(sort_col))
+
     # Проверка логики min_price <= max_price
     if min_price is not None and max_price is not None and min_price > max_price:
         raise HTTPException(
@@ -66,7 +98,7 @@ async def get_all_products(
     products_stmt = (
         select(ProductModel)
         .where(*filters)
-        .order_by(ProductModel.id)
+        .order_by(*sorted_list)
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
