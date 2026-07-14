@@ -49,11 +49,23 @@ async def create_review(
     """
     Создаёт новый отзыв, привязанный к текущему продукту и пользователю (только для 'buyer').
     """
+
+    #Проверяем есть ли такой продукт
     product_result = await db.scalars(
         select(ProductModel).where(ProductModel.id == review.product_id, ProductModel.is_active == True)
     )
     if not product_result.first():
         raise HTTPException(status_code=404, detail="Product not found or inactive")
+
+    #Проверяем есть ли отзыв от этого пользователя на этот продукт
+    existing_review = await db.scalar(
+        select(ReviewModel).where(
+            ReviewModel.product_id == review.product_id,
+            ReviewModel.user_id == current_user.id
+        )
+    )
+    if existing_review:
+        raise HTTPException(status_code=409, detail="You have already reviewed this product")
 
     db_review = ReviewModel(**review.model_dump(), user_id=current_user.id)
     db.add(db_review)
