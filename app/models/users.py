@@ -4,6 +4,7 @@ from app.database import Base
 from .reviews import Review
 from .categories import Category
 from .products import Product
+from .cart_items import CartItem
 
 
 class User(Base):
@@ -14,7 +15,8 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     role: Mapped[str] = mapped_column(String, default="buyer")  # "buyer" or "seller"
-
+    orders: Mapped[list["Order"]] = relationship("Order", back_populates="user", cascade="all, delete-orphan")
     products: Mapped[list["Product"]] = relationship("Product", back_populates="seller")
     categories: Mapped[list["Category"]] = relationship("Category", back_populates="admin")
     reviews: Mapped[list["Review"]] = relationship("Review", back_populates="buyer")
+    cart_items: Mapped[list["CartItem"]] = relationship("CartItem", back_populates="user", cascade="all, delete-orphan")

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from app.models.users import User as UserModel
 from app.auth import get_current_seller
 from app.models.reviews import Review as ReviewModel
@@ -10,6 +10,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db_depends import get_async_db
 from sqlalchemy import select, func, desc, update, asc, or_
 from enum import Enum
+from pathlib import Path
+import uuid
+
+# Константы
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent #  Абсолютный путь к корню проекта Path(__file__) это путь к текущему файлу (products.py),
+                                                         # а .resolve() абсолютный путь (без .., без символических ссылок)
+                                                         # и .parent.parent.parent  поднимаемся на три уровня вверх, то есть корень проекта
+MEDIA_ROOT = BASE_DIR / "media" / "products" # Физическая папка на диске, куда сохраняются все изображения товаров. Создаётся автоматически при старте.
+MEDIA_ROOT.mkdir(parents=True, exist_ok=True) # Cоздаёт папку, если её нет
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"} # Белый список MIME-типов. Защищает от загрузки файлов с ненужным расширением
+MAX_IMAGE_SIZE = 2 * 1024 * 1024  # 2 097 152 байт Ограничение размера изображения
 
 # Создаём маршрутизатор для товаров
 router = APIRouter(
@@ -29,6 +41,35 @@ class ProductSortField(str, Enum):
 class SortDir(str, Enum):
     asc = "asc"
     desc = "desc"
+
+# Вспомогательные функции для медиафайлов
+
+async def save_product_image(file: UploadFile) -> str:
+    """
+    Сохраняет изображение товара и возвращает относительный URL.
+    """
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=400, detail="Only JPG, PNG or WebP images are allowed")
+    content = await file.read()
+    if len(content) > MAX_IMAGE_SIZE:
+        raise HTTPException(status_code=400, detail="Image is too large")
+    extension = Path(file.filename or "").suffix.lower() or ".jpg"
+    file_name = f'{uuid.uuid4()}{extension}'
+    file_path = MEDIA_ROOT / file_name
+    file_path.write_bytes(content)
+
+    return f'/media/products/{file_name}'
+
+async def remove_product_image(url: str | None) -> None:
+    """
+    Удаляет файл изображения, если он существует.
+    """
+    if not url:
+        return
+    relative_path = url.lstrip("/")
+    file_path = BASE_DIR / relative_path
+    if file_path.exists():
+        file_path.unlink()
 
 @router.get("/", response_model=ProductList)
 async def get_all_products(
@@ -213,9 +254,10 @@ async def get_reviews_by_product(product_id: int, db: AsyncSession = Depends(get
 
 @router.post("/", response_model=ProductSchema, status_code=201)
 async def create_product(
-    product: ProductCreate,
+    product: ProductCreate = Depends(ProductCreate.as_form),
     db: AsyncSession = Depends(get_async_db),
-    current_user: UserModel = Depends(get_current_seller)
+    current_user: UserModel = Depends(get_current_seller),
+    image: UploadFile | None = File(None)
 ):
     """
     Создаёт новый товар, привязанный к текущему продавцу (только для 'seller').
@@ -225,7 +267,8 @@ async def create_product(
     )
     if not category_result.first():
         raise HTTPException(status_code=400, detail="Category not found or inactive")
-    db_product = ProductModel(**product.model_dump(), seller_id=current_user.id)
+    image_url = await save_product_image(image) if image else None
+    db_product = ProductModel(**product.model_dump(), seller_id=current_user.id, image_url=image_url)
     db.add(db_product)
     await db.commit()
     await db.refresh(db_product)  # Для получения id и is_active из базы
@@ -234,9 +277,10 @@ async def create_product(
 @router.put("/{product_id}", response_model=ProductSchema)
 async def update_product(
     product_id: int,
-    product: ProductCreate,
+    product: ProductCreate = Depends(ProductCreate.as_form),
     db: AsyncSession = Depends(get_async_db),
-    current_user: UserModel = Depends(get_current_seller)
+    current_user: UserModel = Depends(get_current_seller),
+    image: UploadFile | None = File(None)
 ):
     """
     Обновляет товар, если он принадлежит текущему продавцу (только для 'seller').
@@ -255,6 +299,9 @@ async def update_product(
     await db.execute(
         update(ProductModel).where(ProductModel.id == product_id).values(**product.model_dump())
     )
+    if image:
+        remove_product_image(db_product.image_url)
+        db_product.image_url = await save_product_image(image)
     await db.commit()
     await db.refresh(db_product)  # Для консистентности данных
     return db_product
@@ -276,9 +323,14 @@ async def delete_product(
         raise HTTPException(status_code=404, detail="Product not found or inactive")
     if product.seller_id != current_user.id:
         raise HTTPException(status_code=403, detail="You can only delete your own products")
+
+    remove_product_image(product.image_url)
+
     await db.execute(
-        update(ProductModel).where(ProductModel.id == product_id).values(is_active=False)
+        update(ProductModel).where(ProductModel.id == product_id).values(image_url=None, is_active=False)
     )
+
     await db.commit()
     await db.refresh(product)  # Для возврата is_active = False
+
     return product

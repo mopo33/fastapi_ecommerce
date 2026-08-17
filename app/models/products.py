@@ -16,13 +16,15 @@ class Product(Base):
     stock: Mapped[int] = mapped_column(Integer, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"), nullable=False)
-    seller_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)  # New
+    seller_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     rating: Mapped[float] = mapped_column(Float, default=0.0, server_default=text('0'), nullable=False)
     category: Mapped["Category"] = relationship("Category", back_populates="products")
-    seller: Mapped["User"] = relationship("User", back_populates="products")  # New
+    seller: Mapped["User"] = relationship("User", back_populates="products")
+    order_items: Mapped[list["OrderItem"]] = relationship("OrderItem", back_populates="product")
     reviews: Mapped[list["Review"]] = relationship("Review", back_populates="product")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    cart_items: Mapped[list["CartItem"]] = relationship("CartItem", back_populates="product", cascade="all, delete-orphan")
     tsv: Mapped[TSVECTOR] = mapped_column(
         TSVECTOR,
         Computed(
