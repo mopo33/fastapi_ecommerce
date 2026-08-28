@@ -2,12 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, update
 from app.models.users import User as UserModel
 from app.auth import get_current_admin
-
 from app.models.categories import Category as CategoryModel
-from app.schemas import Category as CategorySchema, CategoryCreate
-
+from app.schemas.categories import Category as CategorySchema, CategoryCreate
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.db_depends import get_async_db
 
 # Создаём маршрутизатор с префиксом и тегом

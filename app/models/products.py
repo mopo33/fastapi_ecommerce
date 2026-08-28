@@ -5,6 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import ForeignKey, func
 from app.database import Base
 from datetime import datetime
+
 class Product(Base):
     __tablename__ = "products"
 

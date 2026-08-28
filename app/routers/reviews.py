@@ -6,7 +6,7 @@ from app.auth import get_current_user
 from sqlalchemy.sql import func
 from app.models.users import User as UserModel
 from app.models.products import Product as ProductModel
-from app.schemas import Review as ReviewSchema, ReviewCreate
+from app.schemas.reviews import Review as ReviewSchema, ReviewCreate
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db_depends import get_async_db
 

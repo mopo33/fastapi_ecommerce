@@ -10,7 +10,9 @@ from app.db_depends import get_async_db
 from app.models.cart_items import CartItem as CartItemModel
 from app.models.orders import Order as OrderModel, OrderItem as OrderItemModel
 from app.models.users import User as UserModel
-from app.schemas import Order as OrderSchema, OrderList
+
+from app.payments import create_yookassa_payment
+from app.schemas.orders import Order as OrderSchema, OrderCheckoutResponse, OrderList
 
 router = APIRouter(
     prefix="/orders",
@@ -30,7 +32,7 @@ async def _load_order_with_items(db: AsyncSession, order_id: int) -> OrderModel 
     return result.first()
 
 
-@router.post("/checkout", response_model=OrderSchema, status_code=201)
+@router.post("/checkout", response_model=OrderCheckoutResponse, status_code=201)
 async def checkout_order(
     db: AsyncSession = Depends(get_async_db),
     current_user: UserModel = Depends(get_current_user),
@@ -87,6 +89,30 @@ async def checkout_order(
     order.total_amount = total_amount
     db.add(order)
 
+    try:
+        await db.flush()
+        payment_info = await create_yookassa_payment(
+            order_id=order.id,
+            amount=order.total_amount,
+            user_email=current_user.email,
+            description=f"Оплата заказа #{order.id}",
+        )
+    except RuntimeError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        print(exc)
+        await db.rollback()
+        raise HTTPException(
+            status_code=502,
+            detail="Не удалось инициировать оплату",
+        ) from exc
+
+    order.payment_id = payment_info.get("id")
+
     await db.execute(delete(CartItemModel).where(CartItemModel.user_id == current_user.id))
     await db.commit()
 
@@ -96,7 +122,10 @@ async def checkout_order(
             status_code=500,
             detail="Failed to load created order",
         )
-    return created_order
+    return OrderCheckoutResponse(
+        order=created_order,
+        confirmation_url=payment_info.get("confirmation_url"),
+    )
 
 @router.get("/", response_model=OrderList)
 async def list_orders(
@@ -134,5 +163,31 @@ async def get_order(
     """
     order = await _load_order_with_items(db, order_id)
     if not order or order.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+        raise HTTPException(status_code=404, detail="Order not found")
     return order
+
+@router.get("/{order_id}/status")
+async def get_order_status(
+    order_id: int,
+    db: AsyncSession = Depends(get_async_db),
+    current_user: UserModel = Depends(get_current_user),
+) -> dict:
+    """
+    Возвращает статус заказа.
+    """
+    order = await db.scalar(select(OrderModel).where(OrderModel.user_id == current_user.id, OrderModel.id == order_id))
+    if not order:
+        raise HTTPException(status_code=404, detail="404 Not Found")
+    if order.status == 'paid':
+        message = f"Спасибо! Заказ #{order_id} оплачен. Ожидайте доставку."
+    elif order.status == 'pending':
+        message = "Оплата в процессе..."
+    else:
+        message = "Оплата не прошла. Попробуйте ещё раз."
+
+    return {
+  "order_id": order_id,
+  "status": order.status,
+  "paid_at": order.paid_at,
+  "message": message
+            }

@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from app.models.users import User as UserModel
 from app.auth import get_current_seller
 from app.models.reviews import Review as ReviewModel
-from app.schemas import Review as ReviewSchema
+from app.schemas.reviews import Review as ReviewSchema
 from app.models.products import Product as ProductModel
 from app.models.categories import Category as CategoryModel
-from app.schemas import Product as ProductSchema, ProductCreate, ProductList
+from app.schemas.products import Product as ProductSchema, ProductCreate, ProductList
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db_depends import get_async_db
 from sqlalchemy import select, func, desc, update, asc, or_
@@ -300,7 +300,7 @@ async def update_product(
         update(ProductModel).where(ProductModel.id == product_id).values(**product.model_dump())
     )
     if image:
-        remove_product_image(db_product.image_url)
+        await remove_product_image(db_product.image_url)
         db_product.image_url = await save_product_image(image)
     await db.commit()
     await db.refresh(db_product)  # Для консистентности данных
@@ -324,7 +324,7 @@ async def delete_product(
     if product.seller_id != current_user.id:
         raise HTTPException(status_code=403, detail="You can only delete your own products")
 
-    remove_product_image(product.image_url)
+    await remove_product_image(product.image_url)
 
     await db.execute(
         update(ProductModel).where(ProductModel.id == product_id).values(image_url=None, is_active=False)

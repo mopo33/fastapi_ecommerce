@@ -6,7 +6,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 
-
 class Order(Base):
     __tablename__ = "orders"
 
@@ -16,6 +15,8 @@ class Order(Base):
     )
     status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
     total_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, nullable=False)
+    payment_id: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

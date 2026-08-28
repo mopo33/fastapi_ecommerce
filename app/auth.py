@@ -60,7 +60,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme),
     Проверяет JWT и возвращает пользователя из базы.
     """
     credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
+        status_code=401,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
@@ -72,7 +72,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme),
             raise credentials_exception
     except jwt.ExpiredSignatureError:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=401,
             detail="Token has expired",
             headers={"WWW-Authenticate": "Bearer"},
         )
@@ -90,7 +90,7 @@ async def get_current_seller(current_user: UserModel = Depends(get_current_user)
     Проверяет, что пользователь имеет роль 'seller'.
     """
     if current_user.role != "seller":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only sellers can perform this action")
+        raise HTTPException(status_code=403, detail="Only sellers can perform this action")
     return current_user
 
 async def get_current_admin(current_user: UserModel = Depends(get_current_user)):
@@ -98,7 +98,7 @@ async def get_current_admin(current_user: UserModel = Depends(get_current_user))
     Проверяет, что пользователь имеет роль 'admin'.
     """
     if current_user.role != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can perform this action")
+        raise HTTPException(status_code=403, detail="Only admins can perform this action")
     return current_user
 
 async def get_current_buyer(current_user: UserModel = Depends(get_current_user)):
@@ -106,5 +106,5 @@ async def get_current_buyer(current_user: UserModel = Depends(get_current_user))
     Проверяет, что пользователь имеет роль 'buyer'.
     """
     if current_user.role != "buyer":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only buyer can perform this action")
+        raise HTTPException(status_code=403, detail="Only buyer can perform this action")
     return current_user
