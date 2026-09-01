@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
+from .products import Product
 
 class CartItemBase(BaseModel):
     product_id: int = Field(description="ID товара")

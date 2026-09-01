@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
 from datetime import datetime
+from .products import Product
 
 class OrderItem(BaseModel):
     id: int = Field(..., description="ID позиции заказа")
