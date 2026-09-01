@@ -10,7 +10,6 @@ __pycache__/
 *.log
 *.db
 postgres_data/
-media/
 static/
 uploads/
 .idea/
